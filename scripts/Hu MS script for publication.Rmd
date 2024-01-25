@@ -1,0 +1,414 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r libraries and data}
+#library(Rtsne)
+library(tidyverse)
+#library(tidyr)
+library(uwot)
+#library(Seurat)
+library(cccd)
+library(cluster)
+#library(leiden)
+#library(igraph)
+#library(plotly)
+library(pheatmap)
+library(ggpubr)
+#library(ggbreak)
+
+```
+
+
+
+
+Transform the data
+```{r arcsinh transform the data}
+#Import csv from Flowjo compensated scale values (gated all cells on CD19+ first)
+raw_data <- read.csv("../data/BCG_scale_values3.csv")
+marker_cols <- 2:8 # set the range of columns that are markers within the csv file
+asinh_scale <- 150 # set the cofactor by which it will be normalized, typically 150 for flow cytometry data
+
+# perform the transformation - first selecting the marker columns, dividing by cofactor is evaluated, then arcsinh is taken of those values - this inserts directly into the first column, replacing the original values
+data_transformed <- raw_data[, marker_cols] <- asinh(raw_data[, marker_cols] / asinh_scale)
+
+#Read summary of data transformation
+summary(raw_data)
+summary(data_transformed)
+
+#Create pseudo-flow plot to check that the data is properly compensated and transformed
+mycolors = c("navyblue", "springgreen2", "yellow", "red3")
+
+ggplot(data = (filter(data_transformed, SampleType == "MS")), aes(x = IgD, y = CD27)) +
+  geom_hex() + scale_fill_gradientn(colors = mycolors)
+
+#write to file
+write_csv(data_transformed, file = "../data/BCG_fixed.csv")
+
+
+```
+
+
+
+
+
+```{r cluster}
+#read in the compensated and transformed data
+data <- read.csv("../data/BCG_fixed.csv")
+
+#Add new ID column for more efficient iteration later
+data <- data %>%
+  mutate("TTID" = paste0(ms_data$SampleType, ms_data$Timepoint))
+
+# We left CD19 out of the signal columns used for the PCA and clustering because all flowjo exported scale values were from a narrow CD19+ gate. We did not want minor differences between CD19 Hi and CD19 Lo to color how the clusters were formed. We did bring CD19 back into the analysis once we introduced heatmaps however.
+signal_columns <- c("CD86", "CD30", "CD38", "IgD", "CD27", "IgM")
+ms_signal_matrix <- data[,signal_columns]
+
+
+#perform the PCA
+ms_pca <- prcomp(~ CD86 + CD30 + CD38 + IgD + CD27 + IgM,  data = ms_signal_matrix)
+
+# Calculate nearest neighbor graph using nng function to cluster the matrix
+ms_nng <- nng(as.matrix(ms_signal_matrix), k=300, use.fnn = T)
+
+# Calculate UMAP
+ms_umap <- uwot::umap(ms_signal_matrix, n_components = 2, n_neighbors = 300, init="spca")
+
+# Calculate Louvain clusters - landed on res 0.2 after some experimentation and looking at max/min values for signal columns within clusters and the differences between them and other clusters. When these differences seemed negligable, we dialed back the resolution until we felt that we had realistic clustered populations
+louvain_clusters <- membership(cluster_louvain(as.undirected(ms_nng), res = 0.2))
+louvain_clusters <- as.factor(louvain_clusters)
+
+
+
+plot_data <- ms_umap
+colnames(plot_data) <- c("x", "y")
+plot_data <- cbind(plot_data, ms_data[,], louvain_clusters)
+plot_data <- plot_data[sample(1:nrow(plot_data)),]
+
+write_csv(plot_data, file = "../data/nocd19_recluster_all_res0.2.csv")
+
+
+```
+
+
+umap plots Fig 3
+```{r umap graphs}
+# This chunk was written to create the plots in Figure 3
+
+# Read in transformed data with umap and cluster info
+plot_data <- read.csv("../data/nocd19_recluster_all_res0.2.csv")
+
+#Turns louvain clusters within the plot_data df from numeric into factors so that the clusters can be graphed discretely
+plot_data$louvain_clusters <- as.factor(plot_data$louvain_clusters)
+
+#Remove 116 because of misleading 6 month timepoint
+plot_data <- plot_data[plot_data$PatientID != 116, ]
+
+
+# graph dimensions necessary because we want to keep the same axes when events are lost
+minx <- min(plot_data$x)
+maxx <- max(plot_data$x)
+miny <- min(plot_data$y)
+maxy <- max(plot_data$y)
+
+# Create an empty list object to store the plots
+MSggplot <- list()
+
+#Create an iteration variable
+time <- c("HC0", "MS0", "MS1", "MS3", "MS6", "MS12", "TD0")
+
+# loop that places all individual IDS onto the umap and plots them each
+for (i in time){
+  MSggplot[[i]] <- ggplot(data = (plot_data[plot_data$TTID == i,])) + 
+  geom_point(aes(x=x, y=y, color=louvain_clusters), alpha = 1) + 
+  ggtitle(paste(i, " - Louvain_clusters")) + 
+  scale_x_continuous(limits = c(minx, maxx)) +
+  scale_y_continuous(limits = c(miny, maxy))
+}
+
+
+# Loop to print all graphs to file
+for (i in names(MSggplot)) {
+  ggsave(MSggplot[[i]], filename = paste0("../output/Fig3 ", i, ".png"))
+}
+
+```
+
+
+
+
+Cluster Heatmap Fig 4
+```{r cluster heatmap}
+# This chunk was written to create the heatmap from Figure 4. Some manipulation of the figure in illustrator was required to resize the heatmap to properly fit the overlaid density plots.
+
+#read in the compensated, transformed data with clusters
+plot_data <- read.csv("../data/nocd19_recluster_all_res0.2.csv")
+
+
+#Create an empty list to iterate, save, or export plot objects
+MSggplot <- list()
+
+# Create vector for signal columns
+signal_columns2 <- c("CD19", "CD86", "CD30", "CD38", "IgD", "CD27", "IgM")
+
+# Calculate the mean of the numeric variables (signal columns) for each level of the categorical variables (The clusters). The by() function is used to group the data by the cluster variable and then the colMeans() function is used to calculate the mean of the numeric variables (signal columns) for each group. Outputs a nested list - each separated by cluster displaying the mean of each signal column.
+hm_data <- by(plot_data, plot_data$louvain_clusters, function(tab) colMeans(tab[,signal_columns2]))
+
+#t transposes the list (hm_data) so that columns become rows and vice versa, after rowbinding the data from the entire list - outputs a matrix with rownames as signal columns and colnames as clusters - do.call required to keep list-like format, otherwise binds all as long single row list
+hm_data <- t(do.call(rbind, hm_data))
+
+# re-order rows
+hm_data <- hm_data[c("CD19", "IgD", "IgM", "CD27", "CD38", "CD86", "CD30"),]
+
+#Generate the plot
+MSggplot[[1]] <- pheatmap(hm_data, scale = "row", cluster_cols = F, cluster_rows = F, main = "All louvain clusters")
+
+#Save the plot as svg
+ggsave(MSggplot[[1]], filename = paste0("../output/Fig4/Louvain Clusters Heatmap.svg"))
+
+```
+
+Density plots - Fig 4 continued
+```{r density plots}
+# use geom_density() to plot flow histograms for each marker on Y axis and cluster on the x axis (facet) - These plots were resized and overlaid on top of the heatmap in figure 4.
+
+
+#read in the compensated, transformed data with clusters
+plot_data <- read.csv("../data/nocd19_recluster_all_res0.2.csv")
+  
+# Get min and max values from signal columns to set x axis for graphs
+summary(plot_data[,4:10])
+
+
+#plot histograms - required different max and min values for each signal column so it was easier to individually plot for each marker rather than loop them all together. Cluster number is at the top of each plot, while the x axis is labelled with the marker. Note that figure 4 required manipulation of these exports so that they were resized properly to fit over top of the heatmap.
+MSggplot <- list()
+maxvalue <- 6
+minvalue <- -5
+MSggplot[[1]] <- ggplot(data = plot_data) +
+  geom_density(mapping = aes(x = CD86)) +
+  facet_wrap(~ louvain_clusters, nrow = 1) +
+  scale_x_continuous(limits = c(minvalue, maxvalue))
+
+maxvalue <- 7.5
+minvalue <- 0
+MSggplot[[2]] <- ggplot(data = plot_data) +
+  geom_density(mapping = aes(x = CD19)) +
+  facet_wrap(~ louvain_clusters, nrow = 1) +
+  scale_x_continuous(limits = c(minvalue, maxvalue))
+
+maxvalue <- 10
+minvalue <- -3
+MSggplot[[3]] <- ggplot(data = plot_data) +
+  geom_density(mapping = aes(x = CD30)) +
+  facet_wrap(~ louvain_clusters, nrow = 1) +
+  scale_x_continuous(limits = c(minvalue, maxvalue))
+
+maxvalue <- 10
+minvalue <- -2.5
+MSggplot[[4]] <- ggplot(data = plot_data) +
+  geom_density(mapping = aes(x = CD38)) +
+  facet_wrap(~ louvain_clusters, nrow = 1) +
+  scale_x_continuous(limits = c(minvalue, maxvalue))
+
+maxvalue <- 8
+minvalue <- -3
+MSggplot[[5]] <- ggplot(data = plot_data) +
+  geom_density(mapping = aes(x = CD27)) +
+  facet_wrap(~ louvain_clusters, nrow = 1) +
+  scale_x_continuous(limits = c(minvalue, maxvalue))
+
+maxvalue <- 8
+minvalue <- -2.5
+MSggplot[[6]] <- ggplot(data = plot_data) +
+  geom_density(mapping = aes(x = IgM)) +
+  facet_wrap(~ louvain_clusters, nrow = 1) +
+  scale_x_continuous(limits = c(minvalue, maxvalue))
+
+maxvalue <- 8
+minvalue <- -2.5
+MSggplot[[7]] <- ggplot(data = plot_data) +
+  geom_density(mapping = aes(x = IgD)) +
+  facet_wrap(~ louvain_clusters, nrow = 1) +
+  scale_x_continuous(limits = c(minvalue, maxvalue))
+
+# Print histograms to file
+for (i in seq_along(MSggplot)) {
+  ggsave(MSggplot[[i]], path = "../output/Fig4", filename = paste0("histograms_per_cluster_by_marker-variable_axis", i, ".svg"))
+}
+
+
+
+
+
+
+
+
+# This section of the chunk was written to get the mean signal values for each marker by each cluster. These values were listed as Mean Relative Fluorescence (MRF) on the heatmap plot in figure 4.
+
+
+# get all mean values for each cluster and signal column combination
+gmfi_list <- list()
+clusters <- unique(plot_data$louvain_clusters)
+signals <- colnames(plot_data[4:10])
+for(i in clusters){
+  temp <- plot_data[plot_data$louvain_clusters == i, ]
+  for(j in colnames(plot_data[4:10])){
+    gmfi_list[[paste(i,j)]] <- mean(temp[,j])
+}}
+
+# Takes list above, converts into matrix, creates a column from the unique rownames, splits the string into the cluster and marker columns
+temp <- as.matrix(gmfi_list)
+temp2 <- cbind(rownames(temp))
+temp <- cbind(temp2, temp)
+temp <- as.data.frame(temp)
+temp <- separate_wider_delim(temp, "V1", delim = " ", names = c("cluster", "marker"))
+colnames(temp)[3] <- c("mean")
+temp$mean <- as.numeric(temp$mean)
+
+
+# Write the MRF values to a new csv file - note that these values were manually placed on the figure from this csv.
+write_csv(temp, "../output/Fig4/mean_values_per_cluster_by_marker.csv")
+```
+
+
+Bar plots fig 5A - number of cells per cluster normalized to number of patient samples within each group
+```{r bar plots fig 5a}
+# This chunk brings in data from a new df that lists how many patient samples are associated with each timepoint. We use this to normalize the actual number of cells in each cluster because not all timepoints had the same number of patients, thus each patient contribution to the whole of all cells counted was different. Patient 116 was again excluded from this figure because they are an outlier which repleted earlier than all others.
+
+
+#Add number of samples per group to df bound to the TTID
+TTIDsamplepergroup <- read.csv("../data/TTID_samplespergroupdf.csv")
+plot_data <- read.csv("../data/nocd19_recluster_all_res0.2.csv")
+
+plot_data <- plot_data %>%
+  left_join(TTIDsamplepergroup, by = "TTID")
+
+total_cells <- plot_data %>%
+  group_by(TTID) %>%
+  add_count(louvain_clusters) %>%
+  mutate(cell_norm_to_patients = n/samples_per_group) %>%
+  mutate(cell_norm_to_patients_no_116 = n/samples_per_group_no116) %>%
+  ungroup()
+
+total_cells$TTID <- factor(total_cells$TTID, levels = c("HC0", "MS0", "MS1", "MS3", "MS6", "MS12", "TD0"))
+total_cells$louvain_clusters <- factor(total_cells$louvain_clusters)
+
+
+
+
+
+
+
+# Create a list for iteration
+testlist <- list()
+
+#Loop that separates each timepoint/sample type by both their category and their cluster, counts the number of events within this division, and places it back into an organized list of dataframes to allow us to plot the normalized values
+time <- c("HC0", "MS0", "MS1", "MS3", "MS6", "MS12", "TD0")
+for(i in time){
+  a <- unique(total_cells$cell_norm_to_patients_no_116[total_cells$TTID == i])
+  b <- unique(total_cells$louvain_clusters[total_cells$TTID == i ])
+  d <- data.frame(cbind(a, b, i))
+  colnames(d) <- c("cellspclusterppatient", "louvain_clusters", "TTID")
+  testlist[[i]] <- d
+}
+# This df now contains the unique numbers of cells per cluster per patient with 116 removed
+testlist <- do.call(rbind, testlist)
+testlist$TTID <- factor(testlist$TTID, levels = c("HC0", "MS0", "MS1", "MS3", "MS6", "MS12", "TD0"))
+testlist$cellspclusterppatient <- as.integer(testlist$cellspclusterppatient)
+
+#Stacked bar chart, total cells per cluster / number of patients per sample
+ggplot(data = testlist, mapping = aes(x = TTID, y = cellspclusterppatient, fill = louvain_clusters)) +
+  geom_col() + 
+  labs(title = "Total cells in louvain_clusters")
+
+
+ggsave(filename = paste0("../output/Fig5A.svg"))
+
+```
+
+
+Bar plots fig 5B and supp fig 2
+```{r Create bar plots for the % contribution of each cluster to the whole per timepoint}
+
+# This first section of the chunk creates the stacked barplot with all patients and all timepoints in the same graph as in figure 5B - note that patient 116 was excluded from this plot because it was a large outlier in the 6 month timepoint.
+
+#read in the compensated, transformed data with clusters
+plot_data <- read.csv("../data/nocd19_recluster_all_res0.2.csv")
+
+MSggplot <- list()
+
+plot_data$louvain_clusters <- as.factor(plot_data$louvain_clusters)
+
+# Remove 116 to exclude misleading sample from total aggregate - do not run this line for individual plots below
+plot_data <- plot_data[plot_data$PatientID != 116, ]
+
+plot_data$TTID <- factor(plot_data$TTID, levels = c("HC0", "MS0", "MS1", "MS3", "MS6", "MS12", "TD0"))
+#Plot louvain clusters percent of the whole stacked for each timepoint - adds up to 100 percent
+MSggplot[[1]] <- ggplot(plot_data, mapping=aes(fill=louvain_clusters, x=TTID)) +
+  geom_bar(data=plot_data, position="fill", stat="count")
+
+#Save plots in svg format
+for (i in names(MSggplot)) {
+  ggsave(MSggplot[[i]], filename = paste0("../output/Fig5B ", i, ".svg"))
+}
+
+
+
+# This next section of the chunk creates the same type of plot as above, however it loops to create an individual plot for every HC and TD patient alone. Note that the x axis on each plot will all read the same, however the list indices are properly named for the patient number. This was required to create supplemental figure 2
+
+
+# Individual plots - TD and HC first
+plot_data <- read.csv("../data/nocd19_recluster_all_res0.2.csv")
+plot_data$louvain_clusters <- as.factor(plot_data$louvain_clusters)
+plot_data <- plot_data[plot_data$TTID == "HC0" | plot_data$TTID == "TD0", ]
+
+#listing as factor required to print by value not index number
+plot_data$PatientID <- as.factor(plot_data$PatientID)
+patientid <- unique(plot_data$PatientID)
+MSggplot <- list()
+for(i in patientid){
+  MSggplot[[i]] <- ggplot(plot_data[plot_data$PatientID == i, ], mapping=aes(fill=louvain_clusters, x=i)) +
+  geom_bar(data=plot_data[plot_data$PatientID == i, ], position="fill", stat="count")
+}
+
+# Save plots in svg format
+for (i in names(MSggplot)) {
+  ggsave(MSggplot[[i]], filename = paste0("../output/Supp Fig 2 TD and HC only ", i, ".svg"))
+}
+
+
+
+# This section of the chunk creates the same type of plot as shown above, however this section plots each individual MS patient and their timepoints together. Note that the patient numbers are not labelled on the graphs themselves, they are labelled in the indices of the MSggplot list object. Not all patients were available for all timepoints, nor did all patients have a matched HC or TD patient. This was required to create supplemental figure 2
+
+# individual plots - MS and their timepoints together - note that 116 is not removed in this case because we are plotting all individual patients by themselves
+plot_data <- read.csv("../data/nocd19_recluster_all_res0.2.csv")
+plot_data$louvain_clusters <- as.factor(plot_data$louvain_clusters)
+plot_data <- plot_data[plot_data$SampleType == "MS", ]
+patientid <- factor(unique(plot_data$PatientID))
+plot_data$Timepoint <- factor(plot_data$Timepoint)
+plot_data$louvain_clusters <- as.factor(plot_data$louvain_clusters)
+MSggplot <- list()
+for(i in patientid){
+  MSggplot[[i]] <- ggplot(plot_data[plot_data$PatientID == i, ], mapping=aes(fill=louvain_clusters, x=Timepoint)) +
+  geom_bar(data=plot_data[plot_data$PatientID == i, ], position="fill", stat="count")
+}
+
+
+
+# Save plots in svg format
+for (i in names(MSggplot)) {
+  ggsave(MSggplot[[i]], filename = paste0("../output/Supp Fig 2 MS only ", i, ".svg"))
+}
+
+
+# Note that the graphing limitations of GGplot when missing timepoints and indexing matched patients made it impossible to create supplemental figure 2 without manipulation to resize and match patient samples in illustrator after the fact. Supplemental figure 2 required resizing the bars to be of uniform size when patients were missing timepoints, as well as for the HC and TD patients. In addition the bars needed to be manually matched to their controls in illustrator.
+```
+
+
+Output Session info
+```{r Session info}
+writeLines(capture.output(sessionInfo()), "../info/sessionInfo.txt")
+```
+
+
