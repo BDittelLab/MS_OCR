@@ -16,19 +16,19 @@ Figures 3, 4, 5, and supplemental figure 2 were created in the R script: Hu MS s
 
 The R script is written such that each major data transformation and figure are parts of a different chunk. Each chunk imports and exports all the necessary data to do the analysis within its own chunk such that all chunks will run independently of each other. 
 
-Files: 
-	data/BCG_scale_values3.csv
-		This csv is the raw data exported from FlowJo. In brief, all fcs files were pooled into a single FlowJo project, compensated, gated on CD19+ events, then concatenated into a single file. The compensated scale values were exported as a csv from the concatenated file. Some minor cleanup was performed on the file to make it acceptable to import into R. This file was imported in the second chunk only, where we inverse hyperbolic arcsin transformed the signal columns. After transformation, the data was summarized, and plotted to check for errors in compensation and transformation. The dataframe is then written to csv as BCG_fixed.csv
-	data/BCG_fixed.csv
-		This csv is the hyperbolic arcsin transformed version of the raw data scale values above. This csv was imported into the third chunk to perform dimensionality reduction and clustering. After clustering data was applied to this dataframe, it was saved as nocd19_recluster_all_res0.2.csv
-	data/nocd19_recluster_all_res0.2.csv
-		This csv is the transformed data with the clustering info. This csv is imported into all following chunks as "plot_data"
-	data/mean_values_per_cluster_by_marker.csv
-		This is an export of mean values of fluorescence for each signal marker and cluster. Created in chunk 6, these values were input into figure 4 as the Mean Relative Fluorescence (MRF)
-	data/TTID_samplespergroupdf.csv
-		This csv lists the number of patients per sample type and timepoint, used in chunk 7 to make figure 5A.
-	info/sessionInfo.txt
-		Contains session information with packages used and versions
+- Files: 
+	- data/BCG_scale_values3.csv
+		- This csv is the raw data exported from FlowJo. In brief, all fcs files were pooled into a single FlowJo project, compensated, gated on CD19+ events, then concatenated into a single file. The compensated scale values were exported as a csv from the concatenated file. Some minor cleanup was performed on the file to make it acceptable to import into R. This file was imported in the second chunk only, where we inverse hyperbolic arcsin transformed the signal columns. After transformation, the data was summarized, and plotted to check for errors in compensation and transformation. The dataframe is then written to csv as BCG_fixed.csv
+	- data/BCG_fixed.csv
+		- This csv is the hyperbolic arcsin transformed version of the raw data scale values above. This csv was imported into the third chunk to perform dimensionality reduction and clustering. After clustering data was applied to this dataframe, it was saved as nocd19_recluster_all_res0.2.csv
+	- data/nocd19_recluster_all_res0.2.csv
+		- This csv is the transformed data with the clustering info. This csv is imported into all following chunks as "plot_data"
+	- data/mean_values_per_cluster_by_marker.csv
+		- This is an export of mean values of fluorescence for each signal marker and cluster. Created in chunk 6, these values were input into figure 4 as the Mean Relative Fluorescence (MRF)
+	- data/TTID_samplespergroupdf.csv
+		- This csv lists the number of patients per sample type and timepoint, used in chunk 7 to make figure 5A.
+	- info/sessionInfo.txt
+		- Contains session information with packages used and versions
 
 Chunk 1: Library import
 Chunk 2: Import raw data and transform
