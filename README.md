@@ -45,7 +45,7 @@ Supplemental Figure 3 was created in Python using the SCCODA library to show whi
 
 - Files:
 	- data/plot.data.fixed.2.csv
-		- CSV containing the same transformed cluster data as in "nocd19_recluster_all_res0.2csv", but with id numbers assigned so this make work with the SCCODA library
+		- CSV containing the same transformed cluster data as in "nocd19_recluster_all_res0.2csv", but with id numbers assigned to make this work with the SCCODA library
 	- data/louvain cluster by timepoint.csv
 		- CSV that was assembled from the above run through the SCCODA library and manually filled in such that we could generate the final colored figure.
 	- info/environment.yml
