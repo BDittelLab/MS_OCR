@@ -43,13 +43,13 @@ Chunk 9: Output session info
 ## Python
 Supplemental Figure 3 was created in Python using the SCCODA library to show which clusters are compositionally significantly different from each other per timepoint, and how many samples would be needed to assign significance for populations composing a smaller proportion of the whole.
 
-Files:
-	data/plot.data.fixed.2.csv
-		CSV containing the same transformed cluster data as in "nocd19_recluster_all_res0.2csv", but with id numbers assigned so this make work with the SCCODA library
-	data/louvain cluster by timepoint.csv
-		CSV that was assembled from the above run through the SCCODA library and manually filled in such that we could generate the final colored figure.
-	info/environment.yml
-		Contains environment information with packages used and their versions.
+- Files:
+	- data/plot.data.fixed.2.csv
+		- CSV containing the same transformed cluster data as in "nocd19_recluster_all_res0.2csv", but with id numbers assigned so this make work with the SCCODA library
+	- data/louvain cluster by timepoint.csv
+		- CSV that was assembled from the above run through the SCCODA library and manually filled in such that we could generate the final colored figure.
+	- info/environment.yml
+		- Contains environment information with packages used and their versions.
 
 
 # Archival
@@ -57,9 +57,9 @@ Files:
 This project is archived in BRIDATA at `smb://ads.versiti.org/bridata/DITB`
 
 # File Hierarchy
-    data: contains all csv data files required to run the analysis
-    info: contains session and environment info for R and python
-    scripts: contains R and Python scripts used for analysis
+    - data: contains all csv data files required to run the analysis
+    - info: contains session and environment info for R and python
+    - scripts: contains R and Python scripts used for analysis
 
 # Environments
 Output of R session info:
