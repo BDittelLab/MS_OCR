@@ -6,7 +6,7 @@ Date archived: 20240122
 
 # Background
 
-We started this project as a means to analyze a large amount of flow cytometric data at once through dimensionality reduction, heatmaps, and graphs that display the composition of cluster contribution to the whole of the CD19+ B cell population in healthy controls (HC), Multiple sclerosis patients (MS), and Treatment delayed patients (TD). MS patients were treated with Ocrevus (OCR) starting after the collection of timepoint 0. Blood samples were collected from these patients at day 0, 1 month after first infusion, 3 months after infusion, 6 months after infusion, and 12 months after infusion. Normal course of treatment with OCR gives the patient a second dose two weeks from the first, and another full dose of OCR at 6 months post infusion. TD patients received their first infusion of OCR, but did not receive their 6 month dose. TD patients have gone 12-14 months since their first OCR infusion.
+We started this project as a means to analyze a large amount of flow cytometric data at once through dimensionality reduction, heatmaps, and graphs that display the composition of cluster contribution to the whole of the CD19+ B cell population in healthy controls (HC), multiple sclerosis patients (MS) at numerous time points, and treatment delayed multiple sclerosis patients (TD). MS patients were treated with Ocrevus (OCR) starting after the collection of timepoint 0. Blood samples were collected from these patients at day 0, 1 month after first infusion, 3 months after infusion, 6 months after infusion, and 12 months after infusion. In the normal course of treatment with OCR, the patient is given a second dose two weeks from the first, and another full dose of OCR at 6 months post first infusion, and every 6 months thereafter. TD patients received their first infusion of OCR, but did not receive their 6 month dose. TD patients have gone 12-14 months since their first OCR infusion. This unique group of patients allowed us to investigate the B cell populations as they repleted in MS patients. Post depletion, nearly all B cells are wiped from the peripheral blood, making it difficult to phenotype the remaining B cells. This project was started as a way to look into alternative methods of analysis of flow cytometric data to better quantify the broader changes in MS patients as they go through depletion with OCR.
 
 Flow cytometry data was concatenated in flowjo, where compensated scale values were exported as a CSV file. This CSV was imported into R where it was transformed and analysis performed.
 
@@ -21,8 +21,8 @@ The R script is written such that each major data transformation and figure are 
 		- This csv is the raw data exported from FlowJo. In brief, all fcs files were pooled into a single FlowJo project, compensated, gated on CD19+ events, then concatenated into a single file. The compensated scale values were exported as a csv from the concatenated file. Some minor cleanup was performed on the file to make it acceptable to import into R. This file was imported in the second chunk only, where we inverse hyperbolic arcsin transformed the signal columns. After transformation, the data was summarized, and plotted to check for errors in compensation and transformation. The dataframe is then written to csv as BCG_fixed.csv
 	- data/BCG_fixed.csv
 		- This csv is the hyperbolic arcsin transformed version of the raw data scale values above. This csv was imported into the third chunk to perform dimensionality reduction and clustering. After clustering data was applied to this dataframe, it was saved as nocd19_recluster_all_res0.2.csv
-	- data/nocd19_recluster_all_res0.2.csv
-		- This csv is the transformed data with the clustering info. This csv is imported into all following chunks as "plot_data"
+	- data/nocd19_recluster_all_res0.2.csv.tar.gz
+		- This csv is the transformed data with the clustering info. This csv is imported into all following chunks as "plot_data" (Must be unzipped first)
 	- data/mean_values_per_cluster_by_marker.csv
 		- This is an export of mean values of fluorescence for each signal marker and cluster. Created in chunk 6, these values were input into figure 4 as the Mean Relative Fluorescence (MRF)
 	- data/TTID_samplespergroupdf.csv
@@ -30,15 +30,15 @@ The R script is written such that each major data transformation and figure are 
 	- info/sessionInfo.txt
 		- Contains session information with packages used and versions
 
-Chunk 1: Library import
-Chunk 2: Import raw data and transform
-Chunk 3: Import transformed data and cluster
-Chunk 4: Plot umaps with cluster groups for figure 3
-Chunk 5: Plot heatmap for figure 4
-Chunk 6: Create density plots that overlay the heatmap in figure 4
-Chunk 7: Create bar plots for figure 5A and supplemental figure 2
-Chunk 8: Create bar plots for figure 5B
-Chunk 9: Output session info
+- Chunk 1: Library import
+- Chunk 2: Import raw data and transform
+- Chunk 3: Import transformed data and cluster
+- Chunk 4: Plot umaps with cluster groups for figure 3
+- Chunk 5: Plot heatmap for figure 4
+- Chunk 6: Create density plots that overlay the heatmap in figure 4
+- Chunk 7: Create bar plots for figure 5A and supplemental figure 2
+- Chunk 8: Create bar plots for figure 5B
+- Chunk 9: Output session info
 
 ## Python
 Supplemental Figure 3 was created in Python using the SCCODA library to show which clusters are compositionally significantly different from each other per timepoint, and how many samples would be needed to assign significance for populations composing a smaller proportion of the whole.
